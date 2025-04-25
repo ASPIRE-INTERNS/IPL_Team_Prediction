@@ -1,0 +1,76 @@
+install requests beautifulsoup4 pandas openpyxl
+
+
+import requests
+import pandas as pd
+import urllib.request
+
+def fetch_statsguru_data(player_id, class_format, stat_type):
+    base_url = "https://stats.espncricinfo.com/ci/engine/player/"
+    url = f"{base_url}{player_id}.html?class={class_format};template=results;type={stat_type};view=innings"
+
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req) as response:
+            html = response.read()
+
+        tables = pd.read_html(html)
+
+        for table in tables:
+            if "Runs" in table.columns or "Wkts" in table.columns:
+                return table
+        return pd.DataFrame()
+
+    except Exception as e:
+        print(f"Error fetching {stat_type} data: {e}")
+        return pd.DataFrame()
+
+
+def save_all_stats_to_single_sheet(player_id, filename):
+    # All relevant formats
+    formats = {
+        'Tests': (1, 'International'),
+        'ODIs': (2, 'International'),
+        'T20Is': (3, 'International'),
+        'First-Class': (4, 'Domestic'),
+        'List A': (5, 'Domestic'),
+        'T20s': (6, 'Domestic'),
+        'IPL': (11, 'IPL')
+    }
+
+    combined_data = []
+
+    for fmt_name, (fmt_code, level) in formats.items():
+        print(f"\n🔎 Fetching {fmt_name} ({level}) data...")
+
+        for stat_type in ['batting', 'bowling']:
+            df = fetch_statsguru_data(player_id, fmt_code, stat_type)
+            if not df.empty:
+                df.insert(0, 'Format', fmt_name)
+                df.insert(1, 'Level', level)
+                df.insert(2, 'Type', stat_type.capitalize())
+                df.insert(3, 'Class', fmt_code)
+                combined_data.append(df)
+
+    if combined_data:
+        all_stats_df = pd.concat(combined_data, ignore_index=True)
+        if not filename.endswith('.xlsx'):
+            filename += '.xlsx'
+        all_stats_df.to_excel(filename, index=False)
+        print(f"\n✅ All combined data saved to {filename}")
+    else:
+        print("❌ No data found to save.")
+
+
+def main():
+    player_id = input("Enter the ESPNcricinfo player ID (e.g., 253802 for Virat Kohli): ").strip()
+    filename = input("Enter the filename to save the stats (e.g., Virat_Stats or Rohit): ").strip()
+    save_all_stats_to_single_sheet(player_id, filename)
+
+
+if __name__ == "__main__":
+    main()
+
+from google.colab import files
+files.download("Tilak Varma.xlsx")
